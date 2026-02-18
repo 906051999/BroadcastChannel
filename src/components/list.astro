@@ -1,6 +1,5 @@
 ---
 import Layout from '../layouts/base.astro'
-import Header from '../components/header.astro'
 import Item from '../components/item.astro'
 
 const { SITE_URL } = Astro.locals
@@ -13,33 +12,40 @@ const afterCursor = posts[0]?.id
 ---
 
 <Layout channel={channel} id="main-container">
-  <slot name="header">
-    <Header channel={channel} />
-  </slot>
+  {
+    Astro.slots.has('topbar-secondary') ? (
+      <div slot="topbar-secondary">
+        <slot name="topbar-secondary" />
+      </div>
+    ) : null
+  }
+  <slot name="header" />
   <div class="items">
     {posts.map((post) => <Item post={post} isItem={isItem} />)}
   </div>
 
-  <div class="pages-container">
-    {
-      before && beforeCursor > 1 ? (
-        <a href={`${SITE_URL}before/${beforeCursor}`} title="Before" class="page">
-          Before
-        </a>
-      ) : (
-        <span class="page-placeholder">&nbsp;</span>
-      )
-    }
+  {
+    Astro.slots.has('footer') ? (
+      <slot name="footer" />
+    ) : (
+      <div class="pages-container">
+        {before && beforeCursor > 1 ? (
+          <a href={`${SITE_URL}before/${beforeCursor}`} title="Before" class="page">
+            Before
+          </a>
+        ) : (
+          <span class="page-placeholder">&nbsp;</span>
+        )}
 
-    <div class="pages-info"></div>
-    {
-      after && afterCursor ? (
-        <a href={`${SITE_URL}after/${afterCursor}`} title="After" class="page">
-          After
-        </a>
-      ) : (
-        <span class="page-placeholder">&nbsp;</span>
-      )
-    }
-  </div>
+        <div class="pages-info" />
+        {after && afterCursor ? (
+          <a href={`${SITE_URL}after/${afterCursor}`} title="After" class="page">
+            After
+          </a>
+        ) : (
+          <span class="page-placeholder">&nbsp;</span>
+        )}
+      </div>
+    )
+  }
 </Layout>

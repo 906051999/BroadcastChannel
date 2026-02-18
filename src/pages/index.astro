@@ -3,6 +3,13 @@ import List from '../components/list.astro'
 import { getChannelInfo } from '../lib/telegram'
 
 const channel = await getChannelInfo(Astro)
+
+const mode = Astro.url.searchParams.get('mode')
+const latestPostId = channel?.posts?.[0]?.id
+
+if (mode !== 'list' && latestPostId) {
+  return Astro.redirect(`/posts/${latestPostId}`)
+}
 ---
 
 <List channel={channel} after={false} />

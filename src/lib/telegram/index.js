@@ -36,17 +36,17 @@ async function hydrateTgEmoji($, content, { staticProxy } = {}) {
   if (!emojiNodes.length)
     return
 
-  await Promise.all(emojiNodes.map((emojiEl) => {
+  for (const emojiEl of emojiNodes) {
     const emojiId = $(emojiEl).attr('emoji-id')
     if (!emojiId)
-      return
+      continue
 
     const imageUrl = getCustomEmojiImage(emojiId, staticProxy)
     if (imageUrl) {
       const imageMarkup = `<img class="tg-emoji" src="${imageUrl}" alt="" loading="lazy" />`
       $(emojiEl).replaceWith(imageMarkup)
     }
-  }))
+  }
 }
 
 function getVideoStickers($, item, { staticProxy, index }) {

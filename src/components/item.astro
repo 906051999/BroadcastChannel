@@ -6,6 +6,7 @@ import { getEnv } from '../lib/env'
 
 const locale = getEnv(import.meta.env, Astro, 'LOCALE')
 const timezone = getEnv(import.meta.env, Astro, 'TIMEZONE')
+const isZh = `${locale || ''}`.toLowerCase().startsWith('zh')
 
 locale && dayjs.locale(locale)
 
@@ -27,6 +28,26 @@ const timeago = datetime.isBefore(dayjs().subtract(1, 'w')) ? datetime.format('H
       <a href={`${SITE_URL}posts/${post.id}`} title={post.datetime} class="item-link">
         <time datetime={post.datetime} title={timeago}>{timeago}</time>
       </a>
+      {
+        COMMENTS && isItem ? (
+          <a
+            href={`https://t.me/${channel}/${post.id}`}
+            target="_blank"
+            rel="noopener"
+            class="time-action time-action-tg"
+            aria-label={isZh ? '去 Telegram 查看讨论/评论' : 'View discussion on Telegram'}
+            title={isZh ? '去 Telegram 查看讨论/评论' : 'View discussion on Telegram'}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path
+                d="M9.9 15.6 9.7 19c.4 0 .6-.2.8-.4l1.9-1.8 3.9 2.9c.7.4 1.2.2 1.4-.7l2.5-11.7c.3-1.1-.4-1.6-1.1-1.3L4.4 10.1c-1.1.4-1.1 1.1-.2 1.4l3.8 1.2 8.8-5.6c.4-.2.8-.1.5.2"
+                fill="currentColor"
+              />
+              <path d="M16.8 7.3c.2-.2.1-.4-.2-.2L7.8 12.7l2.1 2.9 6.9-8.3Z" fill="currentColor" opacity="0.25" />
+            </svg>
+          </a>
+        ) : null
+      }
     </div>
   </div>
   {post.content.length > 0 && <div class={`text-box content`} set:html={post.content} />}
@@ -37,13 +58,13 @@ const timeago = datetime.isBefore(dayjs().subtract(1, 'w')) ? datetime.format('H
           {post.reactions.map((reaction) => (
             <span class={`reaction-pill${reaction.isPaid ? ' reaction-pill-paid' : ''}`}>
               <span class="reaction-emoji">
-                {
-                  reaction.isPaid
-                    ? '\u2B50'
-                    : reaction.emojiImage
-                      ? <img src={reaction.emojiImage} alt={reaction.emoji || 'emoji'} loading="lazy" />
-                      : reaction.emoji
-                }
+                {reaction.isPaid ? (
+                  '\u2B50'
+                ) : reaction.emojiImage ? (
+                  <img src={reaction.emojiImage} alt={reaction.emoji || 'emoji'} loading="lazy" />
+                ) : (
+                  reaction.emoji
+                )}
               </span>
               <span class="reaction-count">{reaction.count}</span>
             </span>
@@ -61,22 +82,6 @@ const timeago = datetime.isBefore(dayjs().subtract(1, 'w')) ? datetime.format('H
             {tag}
           </a>
         ))}
-      </div>
-    )
-  }
-
-  {
-    COMMENTS && isItem && (
-      <div class="comments">
-        <script
-          is:inline
-          async
-          src="https://telegram.org/js/telegram-widget.js"
-          data-telegram-discussion={`${channel}/${post.id}`}
-          data-comments-limit="50"
-          data-colorful="1"
-          data-color="454545"
-        />
       </div>
     )
   }

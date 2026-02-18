@@ -1,39 +1,375 @@
 ---
-import { getEnv } from '../../lib/env'
-import voidFile from '../../assets/void.png'
 import List from '../../components/list.astro'
 import { getChannelInfo } from '../../lib/telegram'
+import { getEnv } from '../../lib/env'
 
 const { SITE_URL } = Astro.locals
+const locale = getEnv(import.meta.env, Astro, 'LOCALE')
+const isZh = `${locale || ''}`.toLowerCase().startsWith('zh')
 
 const channelInfo = await getChannelInfo(Astro)
 
+const currentId = `${Astro.params.id ?? ''}`
+
 const post = await getChannelInfo(Astro, {
   type: 'post',
-  id: Astro.params.id,
+  id: currentId,
 })
+
+const olderChannel = await getChannelInfo(Astro, {
+  before: currentId,
+})
+
+const newerChannel = await getChannelInfo(Astro, {
+  after: currentId,
+})
+
+const olderPosts = (olderChannel?.posts ?? []).filter((p) => p?.id && `${p.id}` !== currentId)
+const newerPosts = (newerChannel?.posts ?? []).filter((p) => p?.id && `${p.id}` !== currentId)
+
+const nextPostId = olderPosts[0]?.id
+const prevPostId = newerPosts[newerPosts.length - 1]?.id
+
+const navNewerPosts = newerPosts.slice(-3)
+const navOlderPosts = olderPosts.slice(0, 7)
+const navPosts = [...navNewerPosts, post, ...navOlderPosts].filter((p) => p?.id)
+
+function htmlToText(html = '') {
+  return `${html}`
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|blockquote|pre|h\d)>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+\n/g, '\n')
+    .trim()
+}
+
+function getFirstLine(html = '') {
+  const text = htmlToText(html)
+  return (
+    text
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)[0] || ''
+  )
+}
 
 const channel = {
   ...(channelInfo || {}),
   posts: [post],
   seo: post,
 }
-
-const staticProxy = getEnv(import.meta.env, Astro, 'STATIC_PROXY') ?? '/static/'
 ---
 
 <List channel={channel} before={false} after={false} isItem={true}>
-  <div slot="header" id="breadcrumb">
-    <img
-      src={channel?.avatar?.startsWith('http') ? staticProxy + channel?.avatar : voidFile.src}
-      alt={channel?.title}
-      loading="eager"
-      class="breadcrumb-avatar"
-    />
-    <div class="breadcrumb-title">
-      <a href={SITE_URL} class="site-title" title={channel?.title}>
-        {channel.title}
-      </a>
+  <nav slot="topbar-secondary" class="reader-topnav" aria-label={isZh ? '附近内容' : 'Nearby posts'}>
+    <button
+      class="reader-topnav-arrow"
+      id="reader-topnav-left"
+      type="button"
+      aria-label={isZh ? '向左滚动' : 'Scroll left'}
+    >
+      ‹
+    </button>
+    <div
+      class="reader-topnav-scroller"
+      id="reader-topnav-scroller"
+      data-current-id={currentId}
+      data-site-url={SITE_URL}
+      data-is-zh={isZh ? '1' : '0'}
+      data-seed={JSON.stringify(
+        navPosts.map((p) => ({
+          id: `${p.id}`,
+          label: getFirstLine(p.content) || p.title || `#${p.id}`,
+        })),
+      )}
+    >
+      {
+        navPosts.map((p) => {
+          const isCurrent = `${p.id}` === currentId
+          const label = getFirstLine(p.content) || p.title || `#${p.id}`
+          return (
+            <a
+              href={`${SITE_URL}posts/${p.id}`}
+              title={label}
+              class={`reader-topnav-item${isCurrent ? ' current' : ''}`}
+              aria-current={isCurrent ? 'page' : undefined}
+            >
+              {label}
+            </a>
+          )
+        })
+      }
+      <button
+        class="reader-topnav-item reader-topnav-more"
+        id="reader-topnav-more"
+        type="button"
+        aria-label={isZh ? '加载更多' : 'Load more'}
+      >
+        …
+      </button>
     </div>
+    <button
+      class="reader-topnav-arrow"
+      id="reader-topnav-right"
+      type="button"
+      aria-label={isZh ? '向右滚动' : 'Scroll right'}
+    >
+      ›
+    </button>
+  </nav>
+
+  <div slot="header" class="reader-header"></div>
+
+  <div slot="footer">
+    <script is:inline>
+      const prev = document.getElementById('reader-prev')
+      const next = document.getElementById('reader-next')
+      const scroller = document.getElementById('reader-topnav-scroller')
+      const leftArrow = document.getElementById('reader-topnav-left')
+      const rightArrow = document.getElementById('reader-topnav-right')
+      const isZh = scroller instanceof HTMLElement && scroller.dataset.isZh === '1'
+
+      document.addEventListener('keydown', (event) => {
+        const tagName = event.target && event.target.tagName
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
+          return
+        }
+
+        if (event.key === 'ArrowLeft' && prev instanceof HTMLAnchorElement) {
+          prev.click()
+        }
+
+        if (event.key === 'ArrowRight' && next instanceof HTMLAnchorElement) {
+          next.click()
+        }
+      })
+
+      const storageKey = 'readerNavV1'
+
+      function normalizeLabel(label) {
+        const normalized = `${label || ''}`.replace(/\s+/g, ' ').trim()
+        return truncateLabel(normalized, 15)
+      }
+
+      function truncateLabel(label, maxChars) {
+        const chars = Array.from(`${label || ''}`)
+        if (!Number.isFinite(maxChars) || maxChars <= 0) {
+          return ''
+        }
+        if (chars.length <= maxChars) {
+          return chars.join('')
+        }
+        if (maxChars === 1) {
+          return '…'
+        }
+        return `${chars.slice(0, maxChars - 1).join('')}…`
+      }
+
+      function numericId(id) {
+        const n = Number.parseInt(`${id}`, 10)
+        return Number.isFinite(n) ? n : null
+      }
+
+      function sortByIdDesc(items) {
+        return [...items].sort((a, b) => {
+          const an = numericId(a.id)
+          const bn = numericId(b.id)
+          if (an != null && bn != null) {
+            return bn - an
+          }
+          return `${b.id}`.localeCompare(`${a.id}`)
+        })
+      }
+
+      function loadState() {
+        const raw = sessionStorage.getItem(storageKey)
+        if (!raw) {
+          return { items: [] }
+        }
+        const parsed = JSON.parse(raw)
+        if (!parsed || !Array.isArray(parsed.items)) {
+          return { items: [] }
+        }
+        return { items: parsed.items.filter((i) => i && i.id) }
+      }
+
+      function saveState(state) {
+        sessionStorage.setItem(storageKey, JSON.stringify({ items: state.items }))
+      }
+
+      function mergeItems(state, newItems) {
+        const map = new Map(state.items.map((i) => [String(i.id), i]))
+        for (const it of newItems) {
+          const id = String(it.id || '')
+          if (!id) {
+            continue
+          }
+          const label = normalizeLabel(it.label) || map.get(id)?.label || `#${id}`
+          map.set(id, { id, label })
+        }
+        const merged = sortByIdDesc([...map.values()])
+        state.items = merged
+      }
+
+      function render(state) {
+        if (!(scroller instanceof HTMLElement)) {
+          return
+        }
+        const currentId = scroller.dataset.currentId || ''
+        const siteUrl = scroller.dataset.siteUrl || '/'
+
+        const prevScrollLeft = scroller.scrollLeft
+
+        while (scroller.firstChild) {
+          scroller.removeChild(scroller.firstChild)
+        }
+
+        for (const it of state.items) {
+          const a = document.createElement('a')
+          a.href = `${siteUrl}posts/${it.id}`
+          a.className = `reader-topnav-item${it.id === currentId ? ' current' : ''}`
+          a.textContent = it.label
+          a.title = it.label
+          if (it.id === currentId) {
+            a.setAttribute('aria-current', 'page')
+          }
+          scroller.appendChild(a)
+        }
+
+        const more = document.createElement('button')
+        more.type = 'button'
+        more.className = 'reader-topnav-item reader-topnav-more'
+        more.id = 'reader-topnav-more'
+        more.setAttribute('aria-label', isZh ? '加载更多' : 'Load more')
+        more.textContent = '…'
+        more.addEventListener('click', (event) => loadMore(state, event.currentTarget))
+        scroller.appendChild(more)
+
+        const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth)
+        scroller.scrollLeft = Math.max(0, Math.min(prevScrollLeft, maxScrollLeft))
+
+        updateArrows()
+      }
+
+      function updateArrows() {
+        if (!(scroller instanceof HTMLElement)) {
+          return
+        }
+        const canScroll = scroller.scrollWidth > scroller.clientWidth + 1
+        const atStart = scroller.scrollLeft <= 0
+        const atEnd = scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 1
+
+        if (leftArrow instanceof HTMLButtonElement) {
+          leftArrow.disabled = !canScroll || atStart
+        }
+        if (rightArrow instanceof HTMLButtonElement) {
+          rightArrow.disabled = !canScroll || atEnd
+        }
+      }
+
+      function scrollByPage(direction) {
+        if (!(scroller instanceof HTMLElement)) {
+          return
+        }
+        const amount = Math.max(240, Math.floor(scroller.clientWidth * 0.9))
+        scroller.scrollBy({ left: direction * amount, behavior: 'smooth' })
+      }
+
+      function loadMore(state, button) {
+        if (!(scroller instanceof HTMLElement)) {
+          return
+        }
+        const currentId = scroller.dataset.currentId || ''
+        const oldest = state.items.reduce((min, it) => {
+          const n = numericId(it.id)
+          if (n == null) {
+            return min
+          }
+          return min == null ? n : Math.min(min, n)
+        }, null)
+        const before = oldest != null ? String(oldest) : currentId
+
+        const btn = button instanceof HTMLButtonElement ? button : null
+        if (btn) {
+          btn.disabled = true
+          btn.classList.add('is-loading')
+          btn.setAttribute('aria-busy', 'true')
+        }
+        document.dispatchEvent(
+          new CustomEvent('bc:loading', {
+            detail: { text: isZh ? '加载更多中…' : 'Loading more…', sticky: true },
+          }),
+        )
+        fetch(`/api/nav.json?before=${encodeURIComponent(before)}`, {
+          headers: { Accept: 'application/json' },
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            const posts = Array.isArray(data?.posts) ? data.posts : []
+            mergeItems(state, posts)
+            saveState(state)
+            render(state)
+          })
+          .finally(() => {
+            document.dispatchEvent(new CustomEvent('bc:loading', { detail: { show: false } }))
+            if (btn) {
+              btn.disabled = false
+              btn.classList.remove('is-loading')
+              btn.removeAttribute('aria-busy')
+            }
+          })
+      }
+
+      if (scroller instanceof HTMLElement) {
+        const seed = JSON.parse(scroller.dataset.seed || '[]')
+        const state = loadState()
+        mergeItems(state, seed)
+        saveState(state)
+        render(state)
+
+        scroller.addEventListener('scroll', () => updateArrows(), { passive: true })
+        window.addEventListener('resize', () => updateArrows(), { passive: true })
+      }
+
+      if (leftArrow instanceof HTMLButtonElement) {
+        leftArrow.addEventListener('click', () => scrollByPage(-1))
+      }
+      if (rightArrow instanceof HTMLButtonElement) {
+        rightArrow.addEventListener('click', () => scrollByPage(1))
+      }
+    </script>
+    {
+      prevPostId ? (
+        <a
+          href={`${SITE_URL}posts/${prevPostId}`}
+          title={isZh ? '较新' : 'Newer'}
+          class="reader-side reader-side-left"
+          id="reader-prev"
+          aria-label={isZh ? '较新' : 'Newer'}
+        >
+          ‹
+        </a>
+      ) : null
+    }
+
+    {
+      nextPostId ? (
+        <a
+          href={`${SITE_URL}posts/${nextPostId}`}
+          title={isZh ? '较旧' : 'Older'}
+          class="reader-side reader-side-right"
+          id="reader-next"
+          aria-label={isZh ? '较旧' : 'Older'}
+        >
+          ›
+        </a>
+      ) : null
+    }
   </div>
 </List>

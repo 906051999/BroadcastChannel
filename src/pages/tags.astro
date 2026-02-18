@@ -1,24 +1,21 @@
 ---
 import Layout from '../layouts/base.astro'
-import Header from '../components/header.astro'
 import { getChannelInfo } from '../lib/telegram'
 import { getEnv } from '../lib/env'
 
 const channel = await getChannelInfo(Astro)
+const locale = getEnv(import.meta.env, Astro, 'LOCALE')
+const isZh = `${locale || ''}`.toLowerCase().startsWith('zh')
 
 channel.seo = {
-  title: 'Tags',
+  title: isZh ? '标签' : 'Tags',
 }
 
 const tags = (getEnv(import.meta.env, Astro, 'TAGS') || '').split(',')
 ---
 
 <Layout channel={channel} id="main-container">
-  <slot name="header">
-    <Header channel={channel} />
-  </slot>
-
-  <div class="section-title">Tags</div>
+  <div class="section-title">{isZh ? '标签' : 'Tags'}</div>
 
   <div class="tag-cloud">
     {

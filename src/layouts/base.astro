@@ -5,11 +5,13 @@ import '../assets/global.css'
 import { SEO } from 'astro-seo'
 import { getEnv } from '../lib/env'
 import backToTopIcon from '../assets/back-to-top.svg'
+import voidFile from '../assets/void.png'
 
 const { SITE_URL, RSS_URL, RSS_PREFIX } = Astro.locals
 const { channel } = Astro.props
 
 const locale = getEnv(import.meta.env, Astro, 'LOCALE')
+const isZh = `${locale || ''}`.toLowerCase().startsWith('zh')
 
 const seo = channel?.seo
 const reqPathname = Astro.url.pathname.replace(/\/$/, '')
@@ -17,6 +19,7 @@ const canonical = SITE_URL.startsWith('http') ? new URL(SITE_URL).origin + reqPa
 
 const { origin, pathname } = new URL(canonical)
 const twitter = getEnv(import.meta.env, Astro, 'TWITTER')
+const staticProxy = getEnv(import.meta.env, Astro, 'STATIC_PROXY') ?? '/static/'
 
 const seoParams = {
   title: seo?.title,
@@ -49,7 +52,17 @@ const seoParams = {
 }
 
 const GOOGLE_SEARCH_SITE = getEnv(import.meta.env, Astro, 'GOOGLE_SEARCH_SITE')
-const searchAction = GOOGLE_SEARCH_SITE ? 'https://www.google.com/search' : '/search/result'
+const searchAction = GOOGLE_SEARCH_SITE ? 'https://www.google.com/search' : '/search/q'
+
+const mode = Astro.url.searchParams.get('mode')
+const isIndex =
+  (pathname === '/' && mode === 'list') ||
+  pathname.startsWith('/before') ||
+  pathname.startsWith('/after') ||
+  pathname.startsWith('/search') ||
+  pathname === '/tags' ||
+  pathname === '/links'
+const isRead = !isIndex
 
 const HEADER_INJECT = getEnv(import.meta.env, Astro, 'HEADER_INJECT')
 const FOOTER_INJECT = getEnv(import.meta.env, Astro, 'FOOTER_INJECT')
@@ -72,7 +85,7 @@ const navs = (getEnv(import.meta.env, Astro, 'NAVS') || '')
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f4f1ec" />
+    <meta name="theme-color" content="#ffffff" />
     <link rel="alternate" type="application/rss+xml" title={`${RSS_PREFIX}${channel?.title}`} href={RSS_URL} />
     <style is:inline>
       @view-transition {
@@ -91,7 +104,52 @@ const navs = (getEnv(import.meta.env, Astro, 'NAVS') || '')
     <Fragment set:html={HEADER_INJECT} />
   </head>
 
-  <body>
+  <body data-mode={isIndex ? 'index' : 'read'}>
+    <header id="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-left">
+          <a class="topbar-channel" href={SITE_URL} title={channel?.title}>
+            <img
+              class="topbar-avatar"
+              src={channel?.avatar?.startsWith('http') ? staticProxy + channel?.avatar : voidFile.src}
+              alt={channel?.title}
+              loading="eager"
+            />
+            <span class="topbar-title">
+              {channel?.title}
+            </span>
+          </a>
+        </div>
+
+        <form class="topbar-search" action={searchAction} method="get">
+          {GOOGLE_SEARCH_SITE ? <input type="hidden" name="as_sitesearch" value={GOOGLE_SEARCH_SITE} /> : null}
+          <input type="search" name="q" placeholder={isZh ? '搜索' : 'Search'} />
+        </form>
+
+        <div class="topbar-right">
+          <div class="topbar-toggle">
+            <a href={SITE_URL} title={channel?.title} class={`topbar-toggle-btn ${isRead ? 'current' : ''}`}>
+              {isZh ? '阅读' : 'Read'}
+            </a>
+            <a
+              href={`${SITE_URL}?mode=list`}
+              title={channel?.title}
+              class={`topbar-toggle-btn ${isIndex ? 'current' : ''}`}
+            >
+              {isZh ? '列表' : 'Index'}
+            </a>
+          </div>
+        </div>
+      </div>
+      {
+        Astro.slots.has('topbar-secondary') ? (
+          <div class="topbar-secondary">
+            <slot name="topbar-secondary" />
+          </div>
+        ) : null
+      }
+    </header>
+
     <div id="wrapper">
       <div id="container">
         <div id="main-container">
@@ -99,53 +157,41 @@ const navs = (getEnv(import.meta.env, Astro, 'NAVS') || '')
         </div>
         <div id="aside-container">
           <slot name="aside">
-            <div class="nav">
-              <div class="nav-item">
-                <a href={SITE_URL} title={channel?.title} class={`nav-link ${pathname === '/' ? 'current' : ''}`}>
-                  Home
-                </a>
-              </div>
-              {
-                TAGS ? (
-                  <div class="nav-item">
-                    <a
-                      href={`${SITE_URL}tags`}
-                      title="Tags"
-                      class={`nav-link ${pathname === '/tags' ? 'current' : ''}`}
-                    >
-                      Tags
-                    </a>
-                  </div>
-                ) : null
-              }
-              {
-                LINKS ? (
-                  <div class="nav-item">
-                    <a
-                      href={`${SITE_URL}links`}
-                      title="Links"
-                      class={`nav-link ${pathname === '/links' ? 'current' : ''}`}
-                    >
-                      Links
-                    </a>
-                  </div>
-                ) : null
-              }
-              {
-                navs.map((nav) => (
-                  <div class="nav-item">
-                    <a href={nav.href} title={nav.title} target="_blank" rel="noopener" class="nav-link">
-                      {nav.title}
-                    </a>
-                  </div>
-                ))
-              }
-            </div>
-            <input class="search-icon" name="icon" type="checkbox" placeholder="Search" />
-            <form class="search-form" action={searchAction} method="get">
-              {GOOGLE_SEARCH_SITE ? <input type="hidden" name="as_sitesearch" value={GOOGLE_SEARCH_SITE} /> : null}
-              <input type="text" name="q" placeholder="Search" />
-            </form>
+            {
+              TAGS ? (
+                <div class="nav-item">
+                  <a
+                    href={`${SITE_URL}tags`}
+                    title={isZh ? '标签' : 'Tags'}
+                    class={`nav-link ${pathname === '/tags' ? 'current' : ''}`}
+                  >
+                    {isZh ? '标签' : 'Tags'}
+                  </a>
+                </div>
+              ) : null
+            }
+            {
+              LINKS ? (
+                <div class="nav-item">
+                  <a
+                    href={`${SITE_URL}links`}
+                    title={isZh ? '链接' : 'Links'}
+                    class={`nav-link ${pathname === '/links' ? 'current' : ''}`}
+                  >
+                    {isZh ? '链接' : 'Links'}
+                  </a>
+                </div>
+              ) : null
+            }
+            {
+              navs.map((nav) => (
+                <div class="nav-item">
+                  <a href={nav.href} title={nav.title} target="_blank" rel="noopener" class="nav-link">
+                    {nav.title}
+                  </a>
+                </div>
+              ))
+            }
             <div class="copyright-wrap">
               Powered by
               <a
@@ -167,6 +213,108 @@ const navs = (getEnv(import.meta.env, Astro, 'NAVS') || '')
     <a href="#wrapper" id="back-to-top" aria-label="Back to top">
       <img {...backToTopIcon} alt="Back to Top" />
     </a>
+    <div id="app-toast" class="app-toast" role="status" aria-live="polite" aria-atomic="true" aria-hidden="true">
+      <span class="app-toast-spinner" aria-hidden="true"></span>
+      <span class="app-toast-text" data-toast-text></span>
+    </div>
+    <script is:inline>
+      ;(() => {
+        const toast = document.getElementById('app-toast')
+        if (!(toast instanceof HTMLElement)) {
+          return
+        }
+        const textEl = toast.querySelector('[data-toast-text]')
+        const isZh = (document.documentElement.lang || '').toLowerCase().startsWith('zh')
+
+        let hideTimer = 0
+        function hide() {
+          toast.classList.remove('is-visible')
+          toast.setAttribute('aria-hidden', 'true')
+          if (hideTimer) {
+            clearTimeout(hideTimer)
+            hideTimer = 0
+          }
+        }
+        function show(message, options) {
+          const sticky = Boolean(options && options.sticky)
+          const timeout = Number(options && options.timeout) || 1600
+
+          if (textEl instanceof HTMLElement) {
+            textEl.textContent = message || ''
+          }
+          toast.classList.add('is-visible')
+          toast.setAttribute('aria-hidden', 'false')
+
+          if (!sticky) {
+            if (hideTimer) {
+              clearTimeout(hideTimer)
+            }
+            hideTimer = window.setTimeout(() => hide(), timeout)
+          }
+        }
+
+        document.addEventListener('bc:loading', (event) => {
+          const detail = event && event.detail ? event.detail : null
+          if (detail && detail.show === false) {
+            hide()
+            return
+          }
+          const message = detail && typeof detail.text === 'string' ? detail.text : isZh ? '加载中…' : 'Loading…'
+          show(message, detail || { sticky: true })
+        })
+
+        const shouldHandleLink = (a, event) => {
+          if (!(a instanceof HTMLAnchorElement)) {
+            return false
+          }
+          if (a.target && a.target !== '_self') {
+            return false
+          }
+          if (a.hasAttribute('download')) {
+            return false
+          }
+          if (event && (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) {
+            return false
+          }
+          const href = a.getAttribute('href') || ''
+          if (!href || href.startsWith('mailto:') || href.startsWith('tel:')) {
+            return false
+          }
+          const url = new URL(a.href, window.location.href)
+          if (url.origin !== window.location.origin) {
+            return false
+          }
+          const samePath = url.pathname === window.location.pathname
+          const sameSearch = url.search === window.location.search
+          if (samePath && sameSearch && url.hash) {
+            return false
+          }
+          return true
+        }
+
+        document.addEventListener('click', (event) => {
+          const target = event.target
+          if (!(target instanceof Element)) {
+            return
+          }
+          const a = target.closest('a')
+          if (!shouldHandleLink(a, event)) {
+            return
+          }
+          show(isZh ? '加载中…' : 'Loading…', { sticky: true })
+        })
+
+        document.addEventListener('submit', (event) => {
+          const form = event.target
+          if (!(form instanceof HTMLFormElement)) {
+            return
+          }
+          show(isZh ? '加载中…' : 'Loading…', { sticky: true })
+        })
+
+        window.addEventListener('pageshow', () => hide(), { passive: true })
+      })()
+    </script>
     <Fragment set:html={FOOTER_INJECT} />
   </body>
 </html>
