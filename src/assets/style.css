@@ -169,6 +169,35 @@ a:hover {
   }
 }
 
+@media (hover: none) {
+  .reader-topnav-arrow,
+  .reader-topnav-item,
+  .topbar-toggle-btn,
+  .reader-side,
+  .time-action,
+  .nav-link,
+  a.page,
+  .tag {
+    transition:
+      transform 0.12s ease,
+      box-shadow 0.12s ease,
+      background-color 0.12s ease,
+      border-color 0.12s ease,
+      color 0.12s ease;
+  }
+
+  .reader-topnav-arrow:not(:disabled):active,
+  .reader-topnav-item:active,
+  .topbar-toggle-btn:active,
+  .reader-side:active,
+  .time-action:active,
+  .nav-link:active,
+  a.page:active,
+  .tag:active {
+    transform: translateY(var(--press-translate-y));
+  }
+}
+
 .reader-topnav-arrow:not(:disabled),
 .reader-topnav-item,
 .topbar-toggle-btn,
@@ -567,6 +596,8 @@ body[data-mode='read'] .time-box {
   text-decoration: none;
   box-shadow: var(--shadows);
   user-select: none;
+  z-index: 1100;
+  touch-action: manipulation;
 }
 
 .reader-side:hover {
@@ -596,11 +627,9 @@ body[data-mode='read'] .time-box {
 
   .reader-side {
     top: auto;
-    bottom: max(3vw, env(safe-area-inset-bottom));
+    bottom: max(56px, 3vw, env(safe-area-inset-bottom));
     transform: none;
     background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
   }
 
   .reader-side-left {
